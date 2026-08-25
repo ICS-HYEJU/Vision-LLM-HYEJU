@@ -1,6 +1,0 @@
-#!/home/choi/vision_LLM/Vision-LLM-260824/.venv/bin/python
-import sys
-from jupyter_client.kernelapp import main
-if __name__ == '__main__':
-    sys.argv[0] = sys.argv[0].removesuffix('.exe')
-    sys.exit(main())
