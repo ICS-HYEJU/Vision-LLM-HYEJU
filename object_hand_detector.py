@@ -79,7 +79,7 @@ while True:
             color = (0,0,255) if i in finger_tips else (255,0,0)
             cv2.circle(frame, point, 6 if i in finger_tips else 4, color, -1)
           
-                # 공
+            # 공
             if len(contour_lst) > 0:
                     # 가장 큰 contour 선택
                     contour = max(contour_lst, key=cv2.contourArea)

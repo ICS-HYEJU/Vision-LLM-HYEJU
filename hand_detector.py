@@ -44,7 +44,7 @@ while True:
     cv2.putText(frame, " / ".join(labels), (20,70), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,255), 2)
 
     # 탐지 결과의 각 손마다 선과 점 그리기
-    for hand in result.hand_landmarks:
+    for hand in result.hand_landmarks: # 왼손, 오른손에 대한 landmark 리스트 형태로 존재
         h, w = frame.shape[:2]  # 프레임 높이와 너비
         points = [(int(p.x * w), int(p.y * h)) for p in hand]  # 프레임 높이와 너비 길이 기준 각 landmark 좌표
 

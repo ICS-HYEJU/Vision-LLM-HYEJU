@@ -90,7 +90,6 @@ while True:
     # 좌우 반전된 화면을 기준으로 왼손과 오른손 정보 변경
     labels = ["Left" if handedness[0].category_name == "Right" else "Right" for handedness in result.handedness]
 
-    # 감지된 모든 손에서 펼쳐진 손가락 개수 계산
     total_finger_count = 0
     for hand in result.hand_landmarks:
         for point1_idx, point2_idx, point3_idx in finger_angle_points:
