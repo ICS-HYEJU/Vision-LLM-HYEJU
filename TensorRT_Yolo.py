@@ -7,7 +7,7 @@ model = YOLO("src/models/YOLO/yolo11n_fp16.engine") #tensorRT GPU에서만 가�
 
 pipeline = (
     "nvarguscamerasrc sensor-id=0 ! "
-    "video/x-raw(memory:NVMM), width=1280, height=720, framerate=60/1 ! "
+    "video/x-raw(memory:NVMM), width=1280, height=720, framerate=30/1 ! "
     "nvvidconv ! "
     "video/x-raw, format=BGRx ! "
     "videoconvert ! "
