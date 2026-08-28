@@ -20,11 +20,11 @@ from ultralytics import YOLO
 from llama_cpp import Llama
 from llama_cpp.llama_chat_format import Gemma4ChatHandler
 
-import cv2
 import numpy as np
 import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
+import subprocess
 
 YOLO_MODEL_PATH = "src/models/YOLO/yolo11n_int8.engine"
 GEMMA_MODEL_PATH = "src/models/Gemma4/google_gemma-4-E2B-it-Q4_K_M.gguf"
@@ -35,6 +35,12 @@ CONTEXT_WINDOW = 2048
 MAX_TOKENS = 20
 DISPLAY_WIDTH = 600
 DISPLAY_HEIGHT = 600
+
+PIPER_PYTHON = "whisper.cpp/.piper_venv/bin/python"
+PIPER_MODEL = "src/models/Piper/ko_KR-kss-medium.onnx"
+OUTPUT_FILE = "src/audio/response.wav"
+SPEAKER_DEVICE = "plughw:3,0"
+
 
 # 빨간색 마스크
 def update_mask(image, h_upper1=10, h_lower2=170):
@@ -47,7 +53,34 @@ def update_mask(image, h_upper1=10, h_lower2=170):
     mask2 = cv2.inRange(hsv_image, lower2, upper2)
     return cv2.bitwise_or(mask1, mask2)
 
+def text_to_speech(text):
+    subprocess.run(
+        [
+            PIPER_PYTHON,
+            "-m",
+            "piper",
 
+            "-m",
+            PIPER_MODEL,
+
+            "-f",
+            OUTPUT_FILE,
+
+            "--",
+            text,
+        ],
+        check=True,
+    )
+
+    subprocess.run(
+        [
+            "aplay",
+            "-D",
+            SPEAKER_DEVICE,
+            OUTPUT_FILE,
+        ],
+        check=True,
+    )
 # 중간 점 기준으로 각도 계산하는 함수
 def calculate_angle(p1, p2, p3):
     vector1 = np.array([p1.x - p2.x, p1.y - p2.y, p1.z - p2.z])
@@ -65,22 +98,22 @@ def calculate_angle(p1, p2, p3):
     return np.degrees(np.arccos(cosine))
 
 
-# base_option = python.BaseOptions(model_asset_path="src/models/MediaPipe/hand_landmarker.task")  # 모델 경로 지정하는 옵션
-# options = vision.HandLandmarkerOptions(base_options=base_option, num_hands=2)                   # 모델 경로와 최대 손 개수 지정
-# hand_detector = vision.HandLandmarker.create_from_options(options)                              # 해당 옵션으로 손 검출하는 객체 생성
-# connections = vision.HandLandmarksConnections.HAND_CONNECTIONS                                  # 각 landmark를 잇는 연결선 정보
+base_option = python.BaseOptions(model_asset_path="src/models/MediaPipe/hand_landmarker.task")  # 모델 경로 지정하는 옵션
+options = vision.HandLandmarkerOptions(base_options=base_option, num_hands=2)                   # 모델 경로와 최대 손 개수 지정
+hand_detector = vision.HandLandmarker.create_from_options(options)                              # 해당 옵션으로 손 검출하는 객체 생성
+connections = vision.HandLandmarksConnections.HAND_CONNECTIONS                                  # 각 landmark를 잇는 연결선 정보
 
-# finger_tips = (4, 8, 12, 16, 20)  # 손가락 끝 landmark의 index
-# angle_threshold = 160             # 손가락 펼쳐짐 여부 판단 각도 임계값
+finger_tips = (4, 8, 12, 16, 20)  # 손가락 끝 landmark의 index
+angle_threshold = 160             # 손가락 펼쳐짐 여부 판단 각도 임계값
 
-# # 각 손가락의 각도를 계산할 landmark index
-# finger_angle_points = (
-#     (1, 2, 3),      # 엄지: 2번 중심
-#     (5, 6, 7),      # 검지: 6번 중심
-#     (9, 10, 11),    # 중지: 10번 중심
-#     (13, 14, 15),   # 약지: 14번 중심
-#     (17, 18, 19),   # 소지: 18번 중심
-# )
+# 각 손가락의 각도를 계산할 landmark index
+finger_angle_points = (
+    (1, 2, 3),      # 엄지: 2번 중심
+    (5, 6, 7),      # 검지: 6번 중심
+    (9, 10, 11),    # 중지: 10번 중심
+    (13, 14, 15),   # 약지: 14번 중심
+    (17, 18, 19),   # 소지: 18번 중심
+)
 
 # --모델 선언------------------------------------
 yolo = YOLO(YOLO_MODEL_PATH)
@@ -122,55 +155,55 @@ while True:
     # 이미지 좌우 반전 및 RGB로 색공간 변환 (전처리)
     frame = cv2.flip(frame, 0)
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    # # 프레임 내 손 탐지
-    # mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-    # result = hand_detector.detect(mp_image)
-    # # 좌우 반전된 화면을 기준으로 왼손과 오른손 정보 변경
-    # labels = ["Left" if handedness[0].category_name == "Right" else "Right" for handedness in result.handedness]
+    # 프레임 내 손 탐지
+    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+    result = hand_detector.detect(mp_image)
+    # 좌우 반전된 화면을 기준으로 왼손과 오른손 정보 변경
+    labels = ["Left" if handedness[0].category_name == "Right" else "Right" for handedness in result.handedness]
 
-    # total_finger_count = 0
-    # for hand in result.hand_landmarks:
-    #     for point1_idx, point2_idx, point3_idx in finger_angle_points:
-    #         angle = calculate_angle(
-    #             hand[point1_idx],
-    #             hand[point2_idx],
-    #             hand[point3_idx],
-    #         )
-    #         if angle >= angle_threshold:
-    #             total_finger_count += 1
+    total_finger_count = 0
+    for hand in result.hand_landmarks:
+        for point1_idx, point2_idx, point3_idx in finger_angle_points:
+            angle = calculate_angle(
+                hand[point1_idx],
+                hand[point2_idx],
+                hand[point3_idx],
+            )
+            if angle >= angle_threshold:
+                total_finger_count += 1
             
-    # if total_finger_count==1:
-    #     pass # 소리 키워
-    # if total_finger_count ==5:
-    #     pass # 노래틀어
-    # if total_finger_count == 0:
-    #     pass # 노래꺼
+    if total_finger_count==1:
+        pass # 소리 키워
+    if total_finger_count ==5:
+        pass # 노래틀어
+    if total_finger_count == 0:
+        pass # 노래꺼
 
             
                     
-    # # 화면 좌측 상단에 손 개수와 펼친 손가락 개수 표시
-    # cv2.putText(frame, f"Hands: {len(result.hand_landmarks)}", (20,35), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,255), 2)
-    # cv2.putText(frame, f"Fingers: {total_finger_count}", (20,70), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,255), 2)
+    # 화면 좌측 상단에 손 개수와 펼친 손가락 개수 표시
+    cv2.putText(frame, f"Hands: {len(result.hand_landmarks)}", (20,35), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,255), 2)
+    cv2.putText(frame, f"Fingers: {total_finger_count}", (20,70), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,255), 2)
 
-    # # 화면 우측 상단에 왼손/오른손/양손 여부 표시
-    # handedness_text = " / ".join(labels)
-    # text_size = cv2.getTextSize(handedness_text, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)[0]
-    # text_x = w - text_size[0] - 20
-    # cv2.putText(frame, handedness_text, (text_x, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,255), 2)
+    # 화면 우측 상단에 왼손/오른손/양손 여부 표시
+    handedness_text = " / ".join(labels)
+    text_size = cv2.getTextSize(handedness_text, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)[0]
+    text_x = w - text_size[0] - 20
+    cv2.putText(frame, handedness_text, (text_x, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,255), 2)
 
-    # # 탐지 결과의 각 손마다 선과 점 그리기
-    # for hand in result.hand_landmarks:
-    #     h, w = frame.shape[:2]  # 프레임 높이와 너비
-    #     points = [(int(p.x * w), int(p.y * h)) for p in hand]  # 프레임 높이와 너비 길이 기준 각 landmark 좌표
+    # 탐지 결과의 각 손마다 선과 점 그리기
+    for hand in result.hand_landmarks:
+        h, w = frame.shape[:2]  # 프레임 높이와 너비
+        points = [(int(p.x * w), int(p.y * h)) for p in hand]  # 프레임 높이와 너비 길이 기준 각 landmark 좌표
 
-    #     # landmark를 연결하는 선 (skeleton) 그리기
-    #     for c in connections:
-    #         cv2.line(frame, points[c.start], points[c.end], (0, 255, 0), 2)
+        # landmark를 연결하는 선 (skeleton) 그리기
+        for c in connections:
+            cv2.line(frame, points[c.start], points[c.end], (0, 255, 0), 2)
 
-    #     # 각 관절 (landmark)에 점 그리기 (손가락 끝은 빨간 점, 그 외에는 파란 점)
-    #     for i, point in enumerate(points):
-    #         color = (0, 0, 255) if i in finger_tips else (255, 0, 0)
-    #         cv2.circle(frame, point, 6 if i in finger_tips else 4, color, -1)
+        # 각 관절 (landmark)에 점 그리기 (손가락 끝은 빨간 점, 그 외에는 파란 점)
+        for i, point in enumerate(points):
+            color = (0, 0, 255) if i in finger_tips else (255, 0, 0)
+            cv2.circle(frame, point, 6 if i in finger_tips else 4, color, -1)
 
     results = yolo.predict(
         source=frame,   # source image
@@ -216,27 +249,27 @@ while True:
             if not success:
                 raise RuntimeError("이미지 인코딩에 실패했습니다.")
             
-            image_base64 = base64.b85encode(buffer).decode("utf-8")
+            image_base64 = base64.b64encode(buffer).decode("utf-8")
             image_data = "data:image/jpeg;base64," + image_base64
             response = llm.create_chat_completion(
                 messages=[
                     {
                         "role": "system",
                         "content": """
-                                    Instruction:
-                                    주어진 신호등 이미지의 현재 색을 판단하시오.
-
-                                    Constraint:
-                                    반드시 다음 세 가지 중 하나만 대답하시오.
-                                    빨간불
-                                    노란불
-                                    파란불
-
-                                    다른 설명이나 문장을 추가하지 마시오.
-
-                                    Output Format:
-                                    한 단어.
-                                """
+                                Instruction:
+                                주어진 신호등 이미지의 현재 색을 판단하시오.
+        
+                                Constraint:
+                                반드시 다음 세 가지 중 하나만 대답하시오.
+                                빨간불
+                                노란불
+                                파란불
+        
+                                다른 설명이나 문장을 추가하지 마시오.
+        
+                                Output Format:
+                                한 단어.
+                            """
                     },
                     {
                         "role": "user",
@@ -264,6 +297,7 @@ while True:
 
             print("\n[Gemma]")
             print(answer)
+            text_to_speech(f"{answer} 입니다.")
         cv2.namedWindow("Traffic Light", cv2.WINDOW_NORMAL)
         cv2.resizeWindow("Traffic Light", DISPLAY_WIDTH, DISPLAY_HEIGHT)
         cv2.imshow("Traffic Light", double_eroded_mask)
